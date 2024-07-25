@@ -124,7 +124,7 @@ update() {
 
 config() {
     echo "V2bX intentará reiniciarse automáticamente después de modificar la configuración."
-    vi /etc/V2bX/config.json
+    nano /etc/V2bX/config.json
     sleep 2
     restart
     check_status
