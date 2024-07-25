@@ -11,11 +11,11 @@ check_ipv6_support() {
 }
 
 add_node_config() {
-    echo -e "${green}请选择节点核心类型：${plain}"
+    echo -e "${green}Seleccione un tipo de núcleo de nodo:${plain}"
     echo -e "${green}1. xray${plain}"
     echo -e "${green}2. singbox${plain}"
     echo -e "${green}3. hysteria2${plain}"
-    read -rp "请输入：" core_type
+    read -rp "por favor seleccione:" core_type
     if [ "$core_type" == "1" ]; then
         core="xray"
         core_xray=true
@@ -26,23 +26,23 @@ add_node_config() {
         core="hysteria2"
         core_hysteria2=true
     else
-        echo "无效的选择。请选择 1 2 3。"
+        echo "Selección invalida. Por favor seleccione 1 2 3."
         continue
     fi
     while true; do
-        read -rp "请输入节点Node ID：" NodeID
+        read -rp "Por favor ingrese el ID del nodo:" NodeID
         # 判断NodeID是否为正整数
         if [[ "$NodeID" =~ ^[0-9]+$ ]]; then
             break  # 输入正确，退出循环
         else
-            echo "错误：请输入正确的数字作为Node ID。"
+            echo "Error: ingrese el número correcto del ID de nodo."
         fi
     done
 
     if [ "$core_hysteria2" = true ] && [ "$core_xray" = false ] && [ "$core_sing" = false ]; then
         NodeType="hysteria2"
     else
-        echo -e "${yellow}请选择节点传输协议：${plain}"
+        echo -e "${yellow}Seleccione un protocolo de transporte:${plain}"
         echo -e "${green}1. Shadowsocks${plain}"
         echo -e "${green}2. Vless${plain}"
         echo -e "${green}3. Vmess${plain}"
@@ -54,7 +54,7 @@ add_node_config() {
             echo -e "${green}5. Hysteria2${plain}"
         fi
         echo -e "${green}6. Trojan${plain}"  
-        read -rp "请输入：" NodeType
+        read -rp "por favor seleccione:" NodeType
         case "$NodeType" in
             1 ) NodeType="shadowsocks" ;;
             2 ) NodeType="vless" ;;
@@ -66,26 +66,26 @@ add_node_config() {
         esac
     fi
     if [ $NodeType == "vless" ]; then
-        read -rp "请选择是否为reality节点？(y/n)" isreality
+        read -rp "Seleccione si es un nodo de reality.(y/n)" isreality
     fi
     certmode="none"
     certdomain="example.com"
     if [ "$isreality" != "y" ] && [ "$isreality" != "Y" ]; then
-        read -rp "请选择是否进行TLS配置？(y/n)" istls
+        read -rp "¿Elija si desea configurar TLS?(y/n)" istls
         if [ "$istls" == "y" ] || [ "$istls" == "Y" ]; then
-            echo -e "${yellow}请选择证书申请模式：${plain}"
-            echo -e "${green}1. http模式自动申请，节点域名已正确解析${plain}"
-            echo -e "${green}2. dns模式自动申请，需填入正确域名服务商API参数${plain}"
-            echo -e "${green}3. self模式，自签证书或提供已有证书文件${plain}"
-            read -rp "请输入：" certmode
+            echo -e "${yellow}Por favor seleccione el modo del certificado:${plain}"
+            echo -e "${green}1. [http]Aplicación automática en modo http, el nombre de dominio del nodo se ha resuelto correctamente${plain}"
+            echo -e "${green}2. [dns]Aplicación automática en modo dns, debe completar los parámetros API del proveedor de servicios${plain}"
+            echo -e "${green}3. [self]Modo autónomo, autofirmar el certificado o proporcionar un archivo de certificado existente${plain}"
+            read -rp "por favor seleccione:" certmode
             case "$certmode" in
                 1 ) certmode="http" ;;
                 2 ) certmode="dns" ;;
                 3 ) certmode="self" ;;
             esac
-            read -rp "请输入节点证书域名(example.com)]：" certdomain
+            read -rp "Por favor ingrese el nombre de dominio (example.com)]：" certdomain
             if [ $certmode != "http" ]; then
-                echo -e "${red}请手动修改配置文件后重启V2bX！${plain}"
+                echo -e "${red}Modifique manualmente el archivo de configuración y reinicie V2bX.${plain}"
             fi
         fi
     fi
@@ -189,14 +189,14 @@ EOF
 }
 
 generate_config_file() {
-    echo -e "${yellow}V2bX 配置文件生成向导${plain}"
-    echo -e "${red}请阅读以下注意事项：${plain}"
-    echo -e "${red}1. 目前该功能正处测试阶段${plain}"
-    echo -e "${red}2. 生成的配置文件会保存到 /etc/V2bX/config.json${plain}"
-    echo -e "${red}3. 原来的配置文件会保存到 /etc/V2bX/config.json.bak${plain}"
-    echo -e "${red}4. 目前仅部分支持TLS${plain}"
-    echo -e "${red}5. 使用此功能生成的配置文件会自带审计，确定继续？(y/n)${plain}"
-    read -rp "请输入：" continue_prompt
+    echo -e "${yellow}V2bX Asistente de generación de archivos de configuración${plain}"
+    echo -e "${red}Por favor lea las siguientes notas:${plain}"
+    echo -e "${red}1. Esta característica se encuentra actualmente en la fase de prueba.${plain}"
+    echo -e "${red}2. El archivo de configuración generado se guardará en /etc/V2bX/config.json${plain}"
+    echo -e "${red}3. El archivo de configuración original se guardará en /etc/V2bX/config.json.bak${plain}"
+    echo -e "${red}4. Actualmente, TLS solo es compatible parcialmente${plain}"
+    echo -e "${red}5. El archivo de configuración generado usando esta función vendrá con su propia auditoría. ¿Está seguro de que desea continuar?(y/n)${plain}"
+    read -rp "por favor seleccione:" continue_prompt
     if [[ "$continue_prompt" =~ ^[Nn][Oo]? ]]; then
         exit 0
     fi
@@ -211,22 +211,22 @@ generate_config_file() {
     
     while true; do
         if [ "$first_node" = true ]; then
-            read -rp "请输入机场网址：" ApiHost
-            read -rp "请输入面板对接API Key：" ApiKey
-            read -rp "是否设置固定的机场网址和API Key？(y/n)" fixed_api
+            read -rp "Por favor introduzca la dirección del panel:" ApiHost
+            read -rp "Ingrese la clave API de comunicación del panel：" ApiKey
+            read -rp "¿Quiere establecer una URL de aeropuerto fija y una clave API?(y/n)" fixed_api
             if [ "$fixed_api" = "y" ] || [ "$fixed_api" = "Y" ]; then
                 fixed_api_info=true
-                echo -e "${red}成功固定地址${plain}"
+                echo -e "${red}Dirección fijada con éxito${plain}"
             fi
             first_node=false
             add_node_config
         else
-            read -rp "是否继续添加节点配置？(回车继续，输入n或no退出)" continue_adding_node
+            read -rp "¿Quieres seguir añadiendo configuración de nodos? (Presione enter para continuar, ingrese n o no para salir)" continue_adding_node
             if [[ "$continue_adding_node" =~ ^[Nn][Oo]? ]]; then
                 break
             elif [ "$fixed_api_info" = false ]; then
-                read -rp "请输入机场网址(https://example.com)：" ApiHost
-                read -rp "请输入面板对接API Key：" ApiKey
+                read -rp "Por favor introduzca la dirección del panel(https://example.com)：" ApiHost
+                read -rp "Ingrese la clave API de comunicación del panel:" ApiKey
             fi
             add_node_config
         fi
@@ -533,7 +533,7 @@ acl:
 masquerade:
   type: 404
 EOF
-    echo -e "${green}V2bX 配置文件生成完成,正在重新启动服务${plain}"
+    echo -e "${green}V2bX Se completo la generación del archivo de configuración y se reinicia el servicio.${plain}"
     v2bx restart
 }
 
