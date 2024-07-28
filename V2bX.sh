@@ -130,7 +130,7 @@ config() {
     check_status
     case $? in
         0)
-            echo -e "V2bX状态: ${green}Corriendo${plain}"
+            echo -e "Estado V2bX: ${green}Corriendo${plain}"
             ;;
         1)
             echo -e "Se detecta que no ha iniciado V2bX o que V2bX no pudo reiniciarse automáticamente. ¿Quiere comprobar el registro?[Y/n]" && echo
