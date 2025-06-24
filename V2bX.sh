@@ -13,7 +13,6 @@ if [[ -f /etc/redhat-release ]]; then
     release="centos"
 elif cat /etc/issue | grep -Eqi "alpine"; then
     release="alpine"
-    echo -e "${red}¡El script aún no es compatible con el sistema alpine!${plain}\n" && exit 1
 elif cat /etc/issue | grep -Eqi "debian"; then
     release="debian"
 elif cat /etc/issue | grep -Eqi "ubuntu"; then
@@ -26,6 +25,8 @@ elif cat /proc/version | grep -Eqi "ubuntu"; then
     release="ubuntu"
 elif cat /proc/version | grep -Eqi "centos|red hat|redhat|rocky|alma|oracle linux"; then
     release="centos"
+elif cat /proc/version | grep -Eqi "arch"; then
+    release="arch"
 else
     echo -e "${red}Versión del sistema no detectada, ¡comuníquese con el autor del script!${plain}\n" && exit 1
 fi
@@ -153,11 +154,17 @@ uninstall() {
         fi
         return 0
     fi
-    systemctl stop V2bX
-    systemctl disable V2bX
-    rm /etc/systemd/system/V2bX.service -f
-    systemctl daemon-reload
-    systemctl reset-failed
+    if [[ x"${release}" == x"alpine" ]]; then
+        service V2bX stop
+        rc-update del V2bX
+        rm /etc/init.d/V2bX -f
+    else
+        systemctl stop V2bX
+        systemctl disable V2bX
+        rm /etc/systemd/system/V2bX.service -f
+        systemctl daemon-reload
+        systemctl reset-failed
+    fi
     rm /etc/V2bX/ -rf
     rm /usr/local/V2bX/ -rf
 
@@ -176,7 +183,11 @@ start() {
         echo ""
         echo -e "${green}V2bX ya se está ejecutando y no es necesario iniciarlo nuevamente. Si necesita reiniciar, seleccione Reiniciar.${plain}"
     else
-        systemctl start V2bX
+        if [[ x"${release}" == x"alpine" ]]; then
+            service V2bX start
+        else
+            systemctl start V2bX
+        fi
         sleep 2
         check_status
         if [[ $? == 0 ]]; then
@@ -192,7 +203,11 @@ start() {
 }
 
 stop() {
-    systemctl stop V2bX
+    if [[ x"${release}" == x"alpine" ]]; then
+        service V2bX stop
+    else
+        systemctl stop V2bX
+    fi
     sleep 2
     check_status
     if [[ $? == 1 ]]; then
@@ -207,7 +222,11 @@ stop() {
 }
 
 restart() {
-    systemctl restart V2bX
+    if [[ x"${release}" == x"alpine" ]]; then
+        service V2bX restart
+    else
+        systemctl restart V2bX
+    fi
     sleep 2
     check_status
     if [[ $? == 0 ]]; then
@@ -221,14 +240,22 @@ restart() {
 }
 
 status() {
-    systemctl status V2bX --no-pager -l
+    if [[ x"${release}" == x"alpine" ]]; then
+        service V2bX status
+    else
+        systemctl status V2bX --no-pager -l
+    fi
     if [[ $# == 0 ]]; then
         before_show_menu
     fi
 }
 
 enable() {
-    systemctl enable V2bX
+    if [[ x"${release}" == x"alpine" ]]; then
+        rc-update add V2bX
+    else
+        systemctl enable V2bX
+    fi
     if [[ $? == 0 ]]; then
         echo -e "${green}V2bX configurado para iniciarse automáticamente después del arranque${plain}"
     else
@@ -241,7 +268,11 @@ enable() {
 }
 
 disable() {
-    systemctl disable V2bX
+    if [[ x"${release}" == x"alpine" ]]; then
+        rc-update del V2bX
+    else
+        systemctl disable V2bX
+    fi
     if [[ $? == 0 ]]; then
         echo -e "${green}V2bX cancela el inicio con éxito${plain}"
     else
@@ -254,7 +285,11 @@ disable() {
 }
 
 show_log() {
-    journalctl -u V2bX.service -e --no-pager -f
+    if [[ x"${release}" == x"alpine" ]]; then
+        echo -e "${red}alpine系统暂不支持日志查看${plain}\n" && exit 1
+    else
+        journalctl -u V2bX.service -e --no-pager -f
+    fi
     if [[ $# == 0 ]]; then
         before_show_menu
     fi
@@ -278,23 +313,41 @@ update_shell() {
 
 # 0: running, 1: not running, 2: not installed
 check_status() {
-    if [[ ! -f /etc/systemd/system/V2bX.service ]]; then
+    if [[ ! -f /usr/local/V2bX/V2bX ]]; then
         return 2
     fi
-    temp=$(systemctl status V2bX | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
-    if [[ x"${temp}" == x"running" ]]; then
-        return 0
+    if [[ x"${release}" == x"alpine" ]]; then
+        temp=$(service V2bX status | awk '{print $3}')
+        if [[ x"${temp}" == x"started" ]]; then
+            return 0
+        else
+            return 1
+        fi
     else
-        return 1
+        temp=$(systemctl status V2bX | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
+        if [[ x"${temp}" == x"running" ]]; then
+            return 0
+        else
+            return 1
+        fi
     fi
 }
 
 check_enabled() {
-    temp=$(systemctl is-enabled V2bX)
-    if [[ x"${temp}" == x"enabled" ]]; then
-        return 0
+    if [[ x"${release}" == x"alpine" ]]; then
+        temp=$(rc-update show | grep V2bX)
+        if [[ x"${temp}" == x"" ]]; then
+            return 1
+        else
+            return 0
+        fi
     else
-        return 1;
+        temp=$(systemctl is-enabled V2bX)
+        if [[ x"${temp}" == x"enabled" ]]; then
+            return 0
+        else
+            return 1;
+        fi
     fi
 }
 
@@ -413,7 +466,11 @@ add_node_config() {
             echo -e "${green}5. Hysteria2${plain}"
         fi
         echo -e "${green}6. Trojan${plain}"  
-        read -rp "por favor seleccione:" NodeType
+        if [ "$core_sing" == true ]; then
+            echo -e "${green}7. Tuic${plain}"
+            echo -e "${green}8. AnyTLS${plain}"
+        fi
+        read -rp "Por favor ingrese:" NodeType
         case "$NodeType" in
             1 ) NodeType="shadowsocks" ;;
             2 ) NodeType="vless" ;;
@@ -421,31 +478,39 @@ add_node_config() {
             4 ) NodeType="hysteria" ;;
             5 ) NodeType="hysteria2" ;;
             6 ) NodeType="trojan" ;;
+            7 ) NodeType="tuic" ;;
+            8 ) NodeType="anytls" ;;
             * ) NodeType="shadowsocks" ;;
         esac
     fi
-    if [ $NodeType == "vless" ]; then
-        read -rp "Seleccione si es un nodo de reality.(y/n)" isreality
+    fastopen=true
+    if [ "$NodeType" == "vless" ]; then
+        read -rp "¿Por favor seleccione si es un nodo de realidad? (y/n)" isreality
+    elif [ "$NodeType" == "hysteria" ] || [ "$NodeType" == "hysteria2" ] || [ "$NodeType" == "tuic" ] || [ "$NodeType" == "anytls" ]; then
+        fastopen=false
+        istls="y"
     fi
+
+    if [[ "$isreality" != "y" && "$isreality" != "Y" &&  "$istls" != "y" ]]; then
+        read -rp "¿Por favor seleccione si desea configurar TLS? (y/n)" istls
+    fi
+
     certmode="none"
     certdomain="example.com"
-    if [ "$isreality" != "y" ] && [ "$isreality" != "Y" ]; then
-        read -rp "¿Elija si desea configurar TLS?(y/n)" istls
-        if [ "$istls" == "y" ] || [ "$istls" == "Y" ]; then
-            echo -e "${yellow}Por favor seleccione el modo de solicitud del certificado:${plain}"
-            echo -e "${green}1. [http]Aplicación automática en modo http, el nombre de dominio del nodo se ha resuelto correctamente${plain}"
-            echo -e "${green}2. [dns]Aplicación automática en modo dns, debe completar los parámetros API del proveedor de servicios${plain}"
-            echo -e "${green}3. [self]Modo autónomo, autofirmar el certificado o proporcionar un archivo de certificado existente${plain}"
-            read -rp "por favor seleccione:" certmode
-            case "$certmode" in
-                1 ) certmode="http" ;;
-                2 ) certmode="dns" ;;
-                3 ) certmode="self" ;;
-            esac
-            read -rp "Por favor ingrese el nombre de dominio del certificado de nodo(example.com)]：" certdomain
-            if [ $certmode != "http" ]; then
-                echo -e "${red}Modifique manualmente el archivo de configuración y reinicie V2bX.${plain}"
-            fi
+    if [[ "$isreality" != "y" && "$isreality" != "Y" && ( "$istls" == "y" || "$istls" == "Y" ) ]]; then
+        echo -e "${yellow}Por favor seleccione el modo de solicitud de certificado:${plain}"
+        echo -e "${green}1. http - El modo http se aplica automáticamente y el nombre de dominio del nodo se ha resuelto correctamente.${plain}"
+        echo -e "${green}2. dns - La aplicación automática en modo DNS requiere que se completen los parámetros correctos de la API del proveedor de servicios de nombre de dominio${plain}"
+        echo -e "${green}3. self - certificado autofirmado o proporcionar un archivo de certificado existente${plain}"
+        read -rp "Por favor ingrese:" certmode
+        case "$certmode" in
+            1 ) certmode="http" ;;
+            2 ) certmode="dns" ;;
+            3 ) certmode="self" ;;
+        esac
+        read -rp "Ingrese el nombre de dominio del certificado del nodo (ejemplo.com):" certdomain
+        if [ "$certmode" != "http" ]; then
+            echo -e "${red}¡Modifique manualmente el archivo de configuración y reinicie V2bX!${plain}"
         fi
     fi
     ipv6_support=$(check_ipv6_support)
@@ -465,7 +530,7 @@ add_node_config() {
             "Timeout": 30,
             "ListenIP": "0.0.0.0",
             "SendIP": "0.0.0.0",
-            "DeviceOnlineMinTraffic": 1000,
+            "DeviceOnlineMinTraffic": 200,
             "EnableProxyProtocol": false,
             "EnableUot": true,
             "EnableTFO": true,
@@ -496,10 +561,9 @@ EOF
             "Timeout": 30,
             "ListenIP": "$listen_ip",
             "SendIP": "0.0.0.0",
-            "DeviceOnlineMinTraffic": 1000,
-            "TCPFastOpen": true,
+            "DeviceOnlineMinTraffic": 200,
+            "TCPFastOpen": $fastopen,
             "SniffEnabled": true,
-            "EnableDNS": true,
             "CertConfig": {
                 "CertMode": "$certmode",
                 "RejectUnknownSni": false,
@@ -527,7 +591,7 @@ EOF
             "Timeout": 30,
             "ListenIP": "",
             "SendIP": "0.0.0.0",
-            "DeviceOnlineMinTraffic": 1000,
+            "DeviceOnlineMinTraffic": 200,
             "CertConfig": {
                 "CertMode": "$certmode",
                 "RejectUnknownSni": false,
@@ -693,22 +757,7 @@ EOF
                 "type": "field",
                 "outboundTag": "block",
                 "ip": [
-                    "geoip:private",
-                    "geoip:cn"
-                ]
-            },
-            {
-                "domain": [
-                    "geosite:google"
-                ],
-                "outboundTag": "IPv4_out",
-                "type": "field"
-            },
-            {
-                "type": "field",
-                "outboundTag": "block",
-                "domain": [
-                    "geosite:cn"
+                    "geoip:private"
                 ]
             },
             {
@@ -761,9 +810,23 @@ EOF
     }
 EOF
 
-    # 创建 sing_origin.json 文件           
+    ipv6_support=$(check_ipv6_support)
+    dnsstrategy="ipv4_only"
+    if [ "$ipv6_support" -eq 1 ]; then
+        dnsstrategy="prefer_ipv4"
+    fi
+    # 创建 sing_origin.json 文件
     cat <<EOF > /etc/V2bX/sing_origin.json
 {
+  "dns": {
+    "servers": [
+      {
+        "tag": "cf",
+        "address": "1.1.1.1",
+        "strategy": "$dnsstrategy"
+      }
+    ]
+  },
   "outbounds": [
     {
       "tag": "direct",
@@ -779,20 +842,6 @@ EOF
     "rules": [
       {
         "ip_is_private": true,
-        "outbound": "block"
-      },
-      {
-        "rule_set": [
-          "geosite-google"
-        ],
-        "outbound": "direct"
-      },
-      {
-        "rule_set": [
-          "geosite-category-ads-all",
-          "geosite-cn",
-          "geoip-cn"
-        ],
         "outbound": "block"
       },
       {
@@ -827,36 +876,6 @@ EOF
         "network": [
           "udp","tcp"
         ]
-      }
-    ],
-    "rule_set": [
-      {
-        "tag": "geoip-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-category-ads-all",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-google",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-google.srs",
-        "download_detour": "direct"
       }
     ]
   },

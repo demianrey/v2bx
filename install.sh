@@ -15,7 +15,6 @@ if [[ -f /etc/redhat-release ]]; then
     release="centos"
 elif cat /etc/issue | grep -Eqi "alpine"; then
     release="alpine"
-    echo -e "${red}¡El script aún no es compatible con el sistema alpine!${plain}\n" && exit 1
 elif cat /etc/issue | grep -Eqi "debian"; then
     release="debian"
 elif cat /etc/issue | grep -Eqi "ubuntu"; then
@@ -28,11 +27,13 @@ elif cat /proc/version | grep -Eqi "ubuntu"; then
     release="ubuntu"
 elif cat /proc/version | grep -Eqi "centos|red hat|redhat|rocky|alma|oracle linux"; then
     release="centos"
+elif cat /proc/version | grep -Eqi "arch"; then
+    release="arch"
 else
     echo -e "${red}Versión del sistema no detectada, ¡comuníquese con el autor del script!${plain}\n" && exit 1
 fi
 
-arch=$(arch)
+arch=$(uname -m)
 
 if [[ $arch == "x86_64" || $arch == "x64" || $arch == "amd64" ]]; then
     arch="64"
@@ -79,28 +80,46 @@ fi
 
 install_base() {
     if [[ x"${release}" == x"centos" ]]; then
-        yum install epel-release -y
-        yum install wget curl unzip tar crontabs socat -y
-        yum install ca-certificates wget -y
+        yum install epel-release wget curl unzip tar crontabs socat ca-certificates -y
         update-ca-trust force-enable
-    else
+    elif [[ x"${release}" == x"alpine" ]]; then
+        apk add wget curl unzip tar socat ca-certificates
+        update-ca-certificates
+    elif [[ x"${release}" == x"debian" ]]; then
+        apt-get update -y
+        apt install wget curl unzip tar cron socat ca-certificates -y
+        update-ca-certificates
+    elif [[ x"${release}" == x"ubuntu" ]]; then
         apt-get update -y
         apt install wget curl unzip tar cron socat -y
         apt-get install ca-certificates wget -y
         update-ca-certificates
+    elif [[ x"${release}" == x"arch" ]]; then
+        pacman -Sy
+        pacman -S --noconfirm --needed wget curl unzip tar cron socat
+        pacman -S --noconfirm --needed ca-certificates wget
     fi
 }
 
 # 0: running, 1: not running, 2: not installed
 check_status() {
-    if [[ ! -f /etc/systemd/system/V2bX.service ]]; then
+    if [[ ! -f /usr/local/V2bX/V2bX ]]; then
         return 2
     fi
-    temp=$(systemctl status V2bX | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
-    if [[ x"${temp}" == x"running" ]]; then
-        return 0
+    if [[ x"${release}" == x"alpine" ]]; then
+        temp=$(service V2bX status | awk '{print $3}')
+        if [[ x"${temp}" == x"started" ]]; then
+            return 0
+        else
+            return 1
+        fi
     else
-        return 1
+        temp=$(systemctl status V2bX | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
+        if [[ x"${temp}" == x"running" ]]; then
+            return 0
+        else
+            return 1
+        fi
     fi
 }
 
@@ -139,16 +158,39 @@ install_V2bX() {
     rm V2bX-linux.zip -f
     chmod +x V2bX
     mkdir /etc/V2bX/ -p
-    rm /etc/systemd/system/V2bX.service -f
-    file="https://github.com/wyx2685/V2bX-script/raw/master/V2bX.service"
-    wget -q -N --no-check-certificate -O /etc/systemd/system/V2bX.service ${file}
-    #cp -f V2bX.service /etc/systemd/system/
-    systemctl daemon-reload
-    systemctl stop V2bX
-    systemctl enable V2bX
-    echo -e "${green}V2bX ${last_version}${plain} La instalación está completa y se ha configurado el inicio automático."
     cp geoip.dat /etc/V2bX/
     cp geosite.dat /etc/V2bX/
+    if [[ x"${release}" == x"alpine" ]]; then
+        rm /etc/init.d/V2bX -f
+        cat <<EOF > /etc/init.d/V2bX
+#!/sbin/openrc-run
+
+name="V2bX"
+description="V2bX"
+
+command="/usr/local/V2bX/V2bX"
+command_args="server"
+command_user="root"
+
+pidfile="/run/V2bX.pid"
+command_background="yes"
+
+depend() {
+        need net
+}
+EOF
+        chmod +x /etc/init.d/V2bX
+        rc-update add V2bX default
+        echo -e "${green}V2bX ${last_version}${plain} 安装完成，已设置开机自启"
+    else
+        rm /etc/systemd/system/V2bX.service -f
+        file="https://github.com/wyx2685/V2bX-script/raw/master/V2bX.service"
+        wget -q -N --no-check-certificate -O /etc/systemd/system/V2bX.service ${file}
+        systemctl daemon-reload
+        systemctl stop V2bX
+        systemctl enable V2bX
+        echo -e "${green}V2bX ${last_version}${plain} 安装完成，已设置开机自启"
+    fi
 
     if [[ ! -f /etc/V2bX/config.json ]]; then
         cp config.json /etc/V2bX/
@@ -156,7 +198,11 @@ install_V2bX() {
         echo -e "Para una nueva instalación, consulte primero el tutorial: https://v2bx.v-50.me/ para configurar el contenido necesario."
         first_install=true
     else
-        systemctl start V2bX
+        if [[ x"${release}" == x"alpine" ]]; then
+            service V2bX start
+        else
+            systemctl start V2bX
+        fi
         sleep 2
         check_status
         echo -e ""

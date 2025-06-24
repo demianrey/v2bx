@@ -54,7 +54,11 @@ add_node_config() {
             echo -e "${green}5. Hysteria2${plain}"
         fi
         echo -e "${green}6. Trojan${plain}"  
-        read -rp "por favor seleccione:" NodeType
+        if [ "$core_sing" == true ]; then
+            echo -e "${green}7. Tuic${plain}"
+            echo -e "${green}8. AnyTLS${plain}"
+        fi
+        read -rp "Por favor ingrese:" NodeType
         case "$NodeType" in
             1 ) NodeType="shadowsocks" ;;
             2 ) NodeType="vless" ;;
@@ -62,31 +66,39 @@ add_node_config() {
             4 ) NodeType="hysteria" ;;
             5 ) NodeType="hysteria2" ;;
             6 ) NodeType="trojan" ;;
+            7 ) NodeType="tuic" ;;
+            8 ) NodeType="anytls" ;;
             * ) NodeType="shadowsocks" ;;
         esac
     fi
-    if [ $NodeType == "vless" ]; then
-        read -rp "Seleccione si es un nodo de reality.(y/n)" isreality
+    fastopen=true
+    if [ "$NodeType" == "vless" ]; then
+        read -rp "¿Por favor seleccione si es un nodo de realidad? (y/n)" isreality
+    elif [ "$NodeType" == "hysteria" ] || [ "$NodeType" == "hysteria2" ] || [ "$NodeType" == "tuic" ] || [ "$NodeType" == "anytls" ]; then
+        fastopen=false
+        istls="y"
     fi
+
+    if [[ "$isreality" != "y" && "$isreality" != "Y" &&  "$istls" != "y" ]]; then
+        read -rp "¿Por favor seleccione si desea configurar TLS? (y/n)" istls
+    fi
+
     certmode="none"
     certdomain="example.com"
-    if [ "$isreality" != "y" ] && [ "$isreality" != "Y" ]; then
-        read -rp "¿Elija si desea configurar TLS?(y/n)" istls
-        if [ "$istls" == "y" ] || [ "$istls" == "Y" ]; then
-            echo -e "${yellow}Por favor seleccione el modo del certificado:${plain}"
-            echo -e "${green}1. [http]Aplicación automática en modo http, el nombre de dominio del nodo se ha resuelto correctamente${plain}"
-            echo -e "${green}2. [dns]Aplicación automática en modo dns, debe completar los parámetros API del proveedor de servicios${plain}"
-            echo -e "${green}3. [self]Modo autónomo, autofirmar el certificado o proporcionar un archivo de certificado existente${plain}"
-            read -rp "por favor seleccione:" certmode
-            case "$certmode" in
-                1 ) certmode="http" ;;
-                2 ) certmode="dns" ;;
-                3 ) certmode="self" ;;
-            esac
-            read -rp "Por favor ingrese el nombre de dominio (example.com)]：" certdomain
-            if [ $certmode != "http" ]; then
-                echo -e "${red}Modifique manualmente el archivo de configuración y reinicie V2bX.${plain}"
-            fi
+    if [[ "$isreality" != "y" && "$isreality" != "Y" && ( "$istls" == "y" || "$istls" == "Y" ) ]]; then
+        echo -e "${yellow}Por favor seleccione el modo de solicitud de certificado:${plain}"
+        echo -e "${green}1. http - El modo http se aplica automáticamente y el nombre de dominio del nodo se ha resuelto correctamente.${plain}"
+        echo -e "${green}2. dns - La aplicación automática en modo DNS requiere que se completen los parámetros correctos de la API del proveedor de servicios de nombre de dominio${plain}"
+        echo -e "${green}3. self - certificado autofirmado o proporcionar un archivo de certificado existente${plain}"
+        read -rp "Por favor ingrese:" certmode
+        case "$certmode" in
+            1 ) certmode="http" ;;
+            2 ) certmode="dns" ;;
+            3 ) certmode="self" ;;
+        esac
+        read -rp "Ingrese el nombre de dominio del certificado del nodo (ejemplo.com):" certdomain
+        if [ "$certmode" != "http" ]; then
+            echo -e "${red}¡Modifique manualmente el archivo de configuración y reinicie V2bX!${plain}"
         fi
     fi
     ipv6_support=$(check_ipv6_support)
@@ -106,7 +118,7 @@ add_node_config() {
             "Timeout": 30,
             "ListenIP": "0.0.0.0",
             "SendIP": "0.0.0.0",
-            "DeviceOnlineMinTraffic": 1000,
+            "DeviceOnlineMinTraffic": 200,
             "EnableProxyProtocol": false,
             "EnableUot": true,
             "EnableTFO": true,
@@ -137,10 +149,9 @@ EOF
             "Timeout": 30,
             "ListenIP": "$listen_ip",
             "SendIP": "0.0.0.0",
-            "DeviceOnlineMinTraffic": 1000,
-            "TCPFastOpen": true,
+            "DeviceOnlineMinTraffic": 200,
+            "TCPFastOpen": $fastopen,
             "SniffEnabled": true,
-            "EnableDNS": true,
             "CertConfig": {
                 "CertMode": "$certmode",
                 "RejectUnknownSni": false,
@@ -168,7 +179,7 @@ EOF
             "Timeout": 30,
             "ListenIP": "",
             "SendIP": "0.0.0.0",
-            "DeviceOnlineMinTraffic": 1000,
+            "DeviceOnlineMinTraffic": 200,
             "CertConfig": {
                 "CertMode": "$certmode",
                 "RejectUnknownSni": false,
@@ -304,108 +315,106 @@ EOF
     
     # 创建 custom_outbound.json 文件
     cat <<EOF > /etc/V2bX/custom_outbound.json
-    [
-        {
-            "tag": "IPv4_out",
-            "protocol": "freedom",
-            "settings": {
-                "domainStrategy": "UseIPv4v6"
-            }
-        },
-        {
-            "tag": "IPv6_out",
-            "protocol": "freedom",
-            "settings": {
-                "domainStrategy": "UseIPv6"
-            }
-        },
-        {
-            "protocol": "blackhole",
-            "tag": "block"
+[
+    {
+        "tag": "IPv4_out",
+        "protocol": "freedom",
+        "settings": {
+            "domainStrategy": "UseIPv4v6"
         }
-    ]
+    },
+    {
+        "tag": "IPv6_out",
+        "protocol": "freedom",
+        "settings": {
+            "domainStrategy": "UseIPv6"
+        }
+    },
+    {
+        "protocol": "blackhole",
+        "tag": "block"
+    }
+]
 EOF
     
     # 创建 route.json 文件
     cat <<EOF > /etc/V2bX/route.json
-    {
-        "domainStrategy": "AsIs",
-        "rules": [
-            {
-                "type": "field",
-                "outboundTag": "block",
-                "ip": [
-                    "geoip:private",
-                    "geoip:cn"
-                ]
-            },
-            {
-                "domain": [
-                    "geosite:google"
-                ],
-                "outboundTag": "IPv4_out",
-                "type": "field"
-            },
-            {
-                "type": "field",
-                "outboundTag": "block",
-                "domain": [
-                    "geosite:cn"
-                ]
-            },
-            {
-                "type": "field",
-                "outboundTag": "block",
-                "domain": [
-                    "regexp:(api|ps|sv|offnavi|newvector|ulog.imap|newloc)(.map|).(baidu|n.shifen).com",
-                    "regexp:(.+.|^)(360|so).(cn|com)",
-                    "regexp:(Subject|HELO|SMTP)",
-                    "regexp:(torrent|.torrent|peer_id=|info_hash|get_peers|find_node|BitTorrent|announce_peer|announce.php?passkey=)",
-                    "regexp:(^.@)(guerrillamail|guerrillamailblock|sharklasers|grr|pokemail|spam4|bccto|chacuo|027168).(info|biz|com|de|net|org|me|la)",
-                    "regexp:(.?)(xunlei|sandai|Thunder|XLLiveUD)(.)",
-                    "regexp:(..||)(dafahao|mingjinglive|botanwang|minghui|dongtaiwang|falunaz|epochtimes|ntdtv|falundafa|falungong|wujieliulan|zhengjian).(org|com|net)",
-                    "regexp:(ed2k|.torrent|peer_id=|announce|info_hash|get_peers|find_node|BitTorrent|announce_peer|announce.php?passkey=|magnet:|xunlei|sandai|Thunder|XLLiveUD|bt_key)",
-                    "regexp:(.+.|^)(360).(cn|com|net)",
-                    "regexp:(.*.||)(guanjia.qq.com|qqpcmgr|QQPCMGR)",
-                    "regexp:(.*.||)(rising|kingsoft|duba|xindubawukong|jinshanduba).(com|net|org)",
-                    "regexp:(.*.||)(netvigator|torproject).(com|cn|net|org)",
-                    "regexp:(..||)(visa|mycard|gash|beanfun|bank).",
-                    "regexp:(.*.||)(gov|12377|12315|talk.news.pts.org|creaders|zhuichaguoji|efcc.org|cyberpolice|aboluowang|tuidang|epochtimes|zhengjian|110.qq|mingjingnews|inmediahk|xinsheng|breakgfw|chengmingmag|jinpianwang|qi-gong|mhradio|edoors|renminbao|soundofhope|xizang-zhiye|bannedbook|ntdtv|12321|secretchina|dajiyuan|boxun|chinadigitaltimes|dwnews|huaglad|oneplusnews|epochweekly|cn.rfi).(cn|com|org|net|club|net|fr|tw|hk|eu|info|me)",
-                    "regexp:(.*.||)(miaozhen|cnzz|talkingdata|umeng).(cn|com)",
-                    "regexp:(.*.||)(mycard).(com|tw)",
-                    "regexp:(.*.||)(gash).(com|tw)",
-                    "regexp:(.bank.)",
-                    "regexp:(.*.||)(pincong).(rocks)",
-                    "regexp:(.*.||)(taobao).(com)",
-                    "regexp:(.*.||)(laomoe|jiyou|ssss|lolicp|vv1234|0z|4321q|868123|ksweb|mm126).(com|cloud|fun|cn|gs|xyz|cc)",
-                    "regexp:(flows|miaoko).(pages).(dev)"
-                ]
-            },
-            {
-                "type": "field",
-                "outboundTag": "block",
-                "ip": [
-                    "127.0.0.1/32",
-                    "10.0.0.0/8",
-                    "fc00::/7",
-                    "fe80::/10",
-                    "172.16.0.0/12"
-                ]
-            },
-            {
-                "type": "field",
-                "outboundTag": "block",
-                "protocol": [
-                    "bittorrent"
-                ]
-            }
-        ]
-    }
+{
+    "domainStrategy": "AsIs",
+    "rules": [
+        {
+            "outboundTag": "block",
+            "ip": [
+                "geoip:private"
+            ]
+        },
+        {
+            "outboundTag": "block",
+            "domain": [
+                "regexp:(api|ps|sv|offnavi|newvector|ulog.imap|newloc)(.map|).(baidu|n.shifen).com",
+                "regexp:(.+.|^)(360|so).(cn|com)",
+                "regexp:(Subject|HELO|SMTP)",
+                "regexp:(torrent|.torrent|peer_id=|info_hash|get_peers|find_node|BitTorrent|announce_peer|announce.php?passkey=)",
+                "regexp:(^.@)(guerrillamail|guerrillamailblock|sharklasers|grr|pokemail|spam4|bccto|chacuo|027168).(info|biz|com|de|net|org|me|la)",
+                "regexp:(.?)(xunlei|sandai|Thunder|XLLiveUD)(.)",
+                "regexp:(..||)(dafahao|mingjinglive|botanwang|minghui|dongtaiwang|falunaz|epochtimes|ntdtv|falundafa|falungong|wujieliulan|zhengjian).(org|com|net)",
+                "regexp:(ed2k|.torrent|peer_id=|announce|info_hash|get_peers|find_node|BitTorrent|announce_peer|announce.php?passkey=|magnet:|xunlei|sandai|Thunder|XLLiveUD|bt_key)",
+                "regexp:(.+.|^)(360).(cn|com|net)",
+                "regexp:(.*.||)(guanjia.qq.com|qqpcmgr|QQPCMGR)",
+                "regexp:(.*.||)(rising|kingsoft|duba|xindubawukong|jinshanduba).(com|net|org)",
+                "regexp:(.*.||)(netvigator|torproject).(com|cn|net|org)",
+                "regexp:(..||)(visa|mycard|gash|beanfun|bank).",
+                "regexp:(.*.||)(gov|12377|12315|talk.news.pts.org|creaders|zhuichaguoji|efcc.org|cyberpolice|aboluowang|tuidang|epochtimes|zhengjian|110.qq|mingjingnews|inmediahk|xinsheng|breakgfw|chengmingmag|jinpianwang|qi-gong|mhradio|edoors|renminbao|soundofhope|xizang-zhiye|bannedbook|ntdtv|12321|secretchina|dajiyuan|boxun|chinadigitaltimes|dwnews|huaglad|oneplusnews|epochweekly|cn.rfi).(cn|com|org|net|club|net|fr|tw|hk|eu|info|me)",
+                "regexp:(.*.||)(miaozhen|cnzz|talkingdata|umeng).(cn|com)",
+                "regexp:(.*.||)(mycard).(com|tw)",
+                "regexp:(.*.||)(gash).(com|tw)",
+                "regexp:(.bank.)",
+                "regexp:(.*.||)(pincong).(rocks)",
+                "regexp:(.*.||)(taobao).(com)",
+                "regexp:(.*.||)(laomoe|jiyou|ssss|lolicp|vv1234|0z|4321q|868123|ksweb|mm126).(com|cloud|fun|cn|gs|xyz|cc)",
+                "regexp:(flows|miaoko).(pages).(dev)"
+            ]
+        },
+        {
+            "outboundTag": "block",
+            "ip": [
+                "127.0.0.1/32",
+                "10.0.0.0/8",
+                "fc00::/7",
+                "fe80::/10",
+                "172.16.0.0/12"
+            ]
+        },
+        {
+            "outboundTag": "block",
+            "protocol": [
+                "bittorrent"
+            ]
+        },
+        {
+            "outboundTag": "IPv4_out",
+            "network": "udp,tcp"
+        }
+    ]
+}
 EOF
-
-    # 创建 sing_origin.json 文件           
+    ipv6_support=$(check_ipv6_support)
+    dnsstrategy="ipv4_only"
+    if [ "$ipv6_support" -eq 1 ]; then
+        dnsstrategy="prefer_ipv4"
+    fi
+    # 创建 sing_origin.json 文件
     cat <<EOF > /etc/V2bX/sing_origin.json
 {
+  "dns": {
+    "servers": [
+      {
+        "tag": "cf",
+        "address": "1.1.1.1",
+        "strategy": "$dnsstrategy"
+      }
+    ]
+  },
   "outbounds": [
     {
       "tag": "direct",
@@ -421,20 +430,6 @@ EOF
     "rules": [
       {
         "ip_is_private": true,
-        "outbound": "block"
-      },
-      {
-        "rule_set": [
-          "geosite-google"
-        ],
-        "outbound": "direct"
-      },
-      {
-        "rule_set": [
-          "geosite-category-ads-all",
-          "geosite-cn",
-          "geoip-cn"
-        ],
         "outbound": "block"
       },
       {
@@ -469,36 +464,6 @@ EOF
         "network": [
           "udp","tcp"
         ]
-      }
-    ],
-    "rule_set": [
-      {
-        "tag": "geoip-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-cn",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-category-ads-all",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",
-        "download_detour": "direct"
-      },
-      {
-        "tag": "geosite-google",
-        "type": "remote",
-        "format": "binary",
-        "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-google.srs",
-        "download_detour": "direct"
       }
     ]
   },
@@ -535,8 +500,4 @@ masquerade:
 EOF
     echo -e "${green}V2bX Se completo la generación del archivo de configuración y se reinicia el servicio.${plain}"
     v2bx restart
-}
-
-install_bbr() {
-    bash <(curl -L -s https://github.com/ylx2016/Linux-NetSpeed/raw/master/tcpx.sh)
 }
