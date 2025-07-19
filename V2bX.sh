@@ -822,16 +822,19 @@ EOF
     "servers": [
       {
         "tag": "cf",
-        "address": "1.1.1.1",
-        "strategy": "$dnsstrategy"
+        "address": "1.1.1.1"
       }
-    ]
+    ],
+    "strategy": "$dnsstrategy"
   },
   "outbounds": [
     {
       "tag": "direct",
       "type": "direct",
-      "domain_strategy": "prefer_ipv4"
+      "domain_resolver": {
+        "server": "cf",
+        "strategy": "$dnsstrategy"
+      }
     },
     {
       "type": "block",
